@@ -1128,7 +1128,7 @@ var MAKE_WEBHOOK  = 'https://hook.eu2.make.com/6b7th8q12xdjkej49lw5tlsqesou4o21'
 var SUPABASE_URL  = 'https://bvwqbjggmnfzqwdpuvjm.supabase.co';
 var SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ2d3FiamdnbW5menF3ZHB1dmptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwMTMxODYsImV4cCI6MjA5NDU4OTE4Nn0.lkbg3-ZQnQJhHBPYJpYeBeuWm-n3XDAsaIq4HWIM84o';
 var TOTAL_STEPS   = 5;
-var formData      = { source: 'sundone.com.au' };
+var formData      = { source: 'QL' };
 
 /* ── Progress ── */
 function updateProgress(step) {
@@ -1215,7 +1215,7 @@ window.submitPostcode = async function() {
       /* ✅ Match found */
       formData.postcode      = pc;
       formData.matched_buyer = data.buyer_name;
-      formData.buyer_id      = data.buyer_id || null;
+      formData.consent_text  = 'I agree to be contacted by ' + data.buyer_name + ' regarding my obligation-free solar quote. My details will be shared only with my matched installer.';
 
       document.getElementById('buyerName').textContent    = data.buyer_name;
       document.getElementById('consentBuyer').textContent = data.buyer_name;
@@ -1231,7 +1231,7 @@ window.submitPostcode = async function() {
     console.warn('Postcode lookup error:', e);
     formData.postcode      = pc;
     formData.matched_buyer = 'Solara Energy Solutions';
-    formData.buyer_id      = null;
+    formData.consent_text  = 'I agree to be contacted by Solara Energy Solutions regarding my obligation-free solar quote. My details will be shared only with my matched installer.';
 
     document.getElementById('buyerName').textContent    = 'Solara Energy Solutions';
     document.getElementById('consentBuyer').textContent = 'Solara Energy Solutions';
@@ -1311,7 +1311,7 @@ window.submitForm = async function() {
    * Named: name, first_name, last_name, email, phone, postcode,
    *        lead_type/niche, source, is_homeowner, avg_quarterly_bill,
    *        interested_in, purchase_timeline.
-   * Extra (→ custom_fields): ownership_type, matched_buyer, buyer_id, utms.
+   * Extra (→ custom_fields): ownership_type, matched_buyer, consent_text.
    */
   var leadPayload = {
     first_name:         formData.firstName,
@@ -1328,12 +1328,7 @@ window.submitForm = async function() {
     /* extras → auto-captured in custom_fields by the edge function */
     ownership_type:     formData.ownership_type     || null,
     matched_buyer:      formData.matched_buyer       || null,
-    buyer_id:           formData.buyer_id            || null,
-    utm_source:         formData.utm_source          || null,
-    utm_medium:         formData.utm_medium          || null,
-    utm_campaign:       formData.utm_campaign        || null,
-    utm_content:        formData.utm_content         || null,
-    submitted_at:       formData.submitted_at
+    consent_text:       formData.consent_text        || null
   };
 
   /* Make webhook gets the full picture for your operator notifications */
@@ -1410,13 +1405,6 @@ document.addEventListener('DOMContentLoaded', function() {
     var v = this.value.replace(/[^\d\s]/g, '');
     this.value = v;
   });
-
-  /* UTM capture */
-  var params = new URLSearchParams(window.location.search);
-  ['utm_source','utm_medium','utm_campaign','utm_content','utm_term'].forEach(function(k) {
-    if (params.get(k)) formData[k] = params.get(k);
-  });
-  if (params.get('utm_campaign')) formData.campaign = params.get('utm_campaign');
 
   /* Scroll-reveal for cards */
   var io = new IntersectionObserver(function(entries) {
