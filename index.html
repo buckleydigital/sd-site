@@ -1215,7 +1215,7 @@ window.submitPostcode = async function() {
       /* ✅ Match found */
       formData.postcode      = pc;
       formData.matched_buyer = data.buyer_name;
-      formData.consent_text  = 'I agree to be contacted by ' + data.buyer_name + ' regarding my obligation-free solar quote. My details will be shared only with my matched installer. I\'ve read the Privacy Policy and Terms of Use.';
+      formData.consent_text  = 'I agree to be contacted by ' + data.buyer_name + ' regarding my obligation-free solar quote. My details will be shared only with my matched installer.';
 
       document.getElementById('buyerName').textContent    = data.buyer_name;
       document.getElementById('consentBuyer').textContent = data.buyer_name;
@@ -1231,7 +1231,7 @@ window.submitPostcode = async function() {
     console.warn('Postcode lookup error:', e);
     formData.postcode      = pc;
     formData.matched_buyer = 'Solara Energy Solutions';
-    formData.consent_text  = 'I agree to be contacted by Solara Energy Solutions regarding my obligation-free solar quote. My details will be shared only with my matched installer. I\'ve read the Privacy Policy and Terms of Use.';
+    formData.consent_text  = 'I agree to be contacted by Solara Energy Solutions regarding my obligation-free solar quote. My details will be shared only with my matched installer.';
 
     document.getElementById('buyerName').textContent    = 'Solara Energy Solutions';
     document.getElementById('consentBuyer').textContent = 'Solara Energy Solutions';
