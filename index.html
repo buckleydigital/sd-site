@@ -834,7 +834,7 @@ footer .logo-icon{box-shadow:none}
           <input type="text" id="postcode" placeholder="e.g. 4350" maxlength="4" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'').slice(0,4)">
           <div class="err-txt" id="err-postcode">Please enter a valid 4-digit Australian postcode</div>
         </div>
-        <button class="btn-next" onclick="submitPostcode()" style="margin-top:6px">Find My Local Installer →</button>
+        <button class="btn-next" id="postcodeBtn" onclick="submitPostcode()" style="margin-top:6px">Find My Local Installer →</button>
         <button class="btn-back" onclick="goBack(4,3)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Back
         </button>
@@ -1116,7 +1116,6 @@ footer .logo-icon{box-shadow:none}
 var MAKE_WEBHOOK  = 'https://hook.eu2.make.com/6b7th8q12xdjkej49lw5tlsqesou4o21';
 var SUPABASE_URL  = 'https://bvwqbjggmnfzqwdpuvjm.supabase.co';
 var SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ2d3FiamdnbW5menF3ZHB1dmptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwMTMxODYsImV4cCI6MjA5NDU4OTE4Nn0.lkbg3-ZQnQJhHBPYJpYeBeuWm-n3XDAsaIq4HWIM84o';
-var MATCHED_BUYER = 'Solara Energy Solutions'; // your actual buyer name
 var TOTAL_STEPS   = 5;
 var formData      = { source: 'sundone.com.au' };
 
@@ -1174,24 +1173,62 @@ window.pickTimeline = function(el, val) {
   setTimeout(function() { goToStep(3, 4); }, 280);
 };
 
-/* ── Step 4: Postcode ── */
-window.submitPostcode = function() {
+/* ── Step 4: Postcode — live buyer lookup ── */
+window.submitPostcode = async function() {
   var pcEl  = document.getElementById('postcode');
   var errEl = document.getElementById('err-postcode');
+  var btn   = document.getElementById('postcodeBtn');
   var pc    = pcEl.value.replace(/\D/g, '');
+
   if (!/^\d{4}$/.test(pc)) {
     pcEl.classList.add('err');
-    errEl.style.display = 'block';
+    errEl.textContent    = 'Please enter a valid 4-digit Australian postcode';
+    errEl.style.display  = 'block';
     return;
   }
   pcEl.classList.remove('err');
   errEl.style.display = 'none';
-  formData.postcode      = pc;
-  formData.matched_buyer = MATCHED_BUYER;
-  // Inject buyer name into step 5
-  document.getElementById('buyerName').textContent    = MATCHED_BUYER;
-  document.getElementById('consentBuyer').textContent = MATCHED_BUYER;
-  goToStep(4, 5);
+
+  /* Loading state */
+  btn.textContent = 'Finding your installer…';
+  btn.disabled    = true;
+
+  try {
+    var resp = await fetch(
+      'https://wmegoygrancfwxagqskh.supabase.co/functions/v1/postcode-lookup' +
+      '?postcode=' + pc + '&niche=solar'
+    );
+    var data = await resp.json();
+
+    if (data.buyer_name) {
+      /* ✅ Match found */
+      formData.postcode      = pc;
+      formData.matched_buyer = data.buyer_name;
+      formData.buyer_id      = data.buyer_id || null;
+
+      document.getElementById('buyerName').textContent    = data.buyer_name;
+      document.getElementById('consentBuyer').textContent = data.buyer_name;
+      goToStep(4, 5);
+    } else {
+      /* ❌ No coverage for this postcode */
+      pcEl.classList.add('err');
+      errEl.textContent   = "We don\u2019t have an installer covering that postcode yet \u2014 try a neighbouring postcode.";
+      errEl.style.display = 'block';
+    }
+  } catch(e) {
+    /* 🔌 Network failure — fall back silently so no lead is lost */
+    console.warn('Postcode lookup error:', e);
+    formData.postcode      = pc;
+    formData.matched_buyer = 'Solara Energy Solutions';
+    formData.buyer_id      = null;
+
+    document.getElementById('buyerName').textContent    = 'Solara Energy Solutions';
+    document.getElementById('consentBuyer').textContent = 'Solara Energy Solutions';
+    goToStep(4, 5);
+  } finally {
+    btn.textContent = 'Find My Local Installer \u2192';
+    btn.disabled    = false;
+  }
 };
 
 /* ── Phone normaliser — accepts 04xxxxxxxx or +614xxxxxxxx ── */
@@ -1224,12 +1261,12 @@ function fv(id, testFn) {
   return ok;
 }
 
-/* ── Submit — dual write to Make + Supabase ── */
+/* ── Submit — submit-lead edge fn (primary) + Make webhook (notification) ── */
 window.submitForm = async function() {
   var ok = true;
-  ok = fv('firstName', function(v){ return v.length > 1; })          && ok;
-  ok = fv('lastName',  function(v){ return v.length > 1; })          && ok;
-  ok = fv('phone',     function(v){ return normaliseAuMobile(v) !== null; }) && ok;
+  ok = fv('firstName', function(v){ return v.length > 1; })                    && ok;
+  ok = fv('lastName',  function(v){ return v.length > 1; })                    && ok;
+  ok = fv('phone',     function(v){ return normaliseAuMobile(v) !== null; })   && ok;
   ok = fv('email',     function(v){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }) && ok;
   if (!ok) return;
   if (!document.getElementById('consent').checked) return;
@@ -1255,52 +1292,60 @@ window.submitForm = async function() {
     fbq('track', 'Lead', { content_name:'Solar Quote', content_category:'Solar', value:0, currency:'AUD' });
   }
   if (typeof gtag !== 'undefined') {
-    gtag('event', 'generate_lead', { event_category:'quote_form', event_label:'solarvault_submitted' });
+    gtag('event', 'generate_lead', { event_category:'quote_form', event_label:'sundone_submitted' });
   }
 
-  /* Payload — shared between both destinations */
-  var payload = {
-    first_name:          formData.firstName,
-    last_name:           formData.lastName,
-    name:                formData.name,
-    email:               formData.email,
-    phone:               formData.phone,
-    is_homeowner:        formData.is_homeowner,
-    ownership_type:      formData.ownership_type,
-    avg_quarterly_bill:  formData.avg_quarterly_bill,
-    purchase_timeline:   formData.purchase_timeline,
-    postcode:            formData.postcode,
-    matched_buyer:       formData.matched_buyer,
-    source:              formData.source,
-    utm_source:          formData.utm_source   || null,
-    utm_medium:          formData.utm_medium   || null,
-    utm_campaign:        formData.utm_campaign || null,
-    utm_content:         formData.utm_content  || null,
-    submitted_at:        formData.submitted_at
+  /*
+   * submit-lead expects named fields; everything else lands in custom_fields.
+   * Named: name, first_name, last_name, email, phone, postcode,
+   *        lead_type/niche, source, is_homeowner, avg_quarterly_bill,
+   *        interested_in, purchase_timeline.
+   * Extra (→ custom_fields): ownership_type, matched_buyer, buyer_id, utms.
+   */
+  var leadPayload = {
+    first_name:         formData.firstName,
+    last_name:          formData.lastName,
+    email:              formData.email,
+    phone:              formData.phone,
+    postcode:           formData.postcode,
+    niche:              'solar',
+    source:             formData.source,
+    is_homeowner:       formData.is_homeowner,
+    purchase_timeline:  formData.purchase_timeline,
+    /* bill_range is not a named field → lands in custom_fields as the raw string e.g. "$300–$500" */
+    bill_range:         formData.avg_quarterly_bill,
+    /* extras → auto-captured in custom_fields by the edge function */
+    ownership_type:     formData.ownership_type     || null,
+    matched_buyer:      formData.matched_buyer       || null,
+    buyer_id:           formData.buyer_id            || null,
+    utm_source:         formData.utm_source          || null,
+    utm_medium:         formData.utm_medium          || null,
+    utm_campaign:       formData.utm_campaign        || null,
+    utm_content:        formData.utm_content         || null,
+    submitted_at:       formData.submitted_at
   };
 
-  /* Fire both writes in parallel — neither failure blocks the other */
+  /* Make webhook gets the full picture for your operator notifications */
+  var makePayload = Object.assign({ name: formData.name }, leadPayload);
+
   try {
     await Promise.all([
-      fetch(MAKE_WEBHOOK, {
-        method: 'POST',
+      /* PRIMARY — handles dedup, insert into ppl_leads, client match, delivery */
+      fetch('https://wmegoygrancfwxagqskh.supabase.co/functions/v1/submit-lead', {
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      }).catch(function(e) { console.warn('Webhook error:', e); }),
+        body:    JSON.stringify(leadPayload)
+      }).catch(function(e) { console.warn('submit-lead error:', e); }),
 
-      fetch(SUPABASE_URL + '/rest/v1/leads', {
-        method: 'POST',
-        headers: {
-          'Content-Type':  'application/json',
-          'apikey':        SUPABASE_KEY,
-          'Authorization': 'Bearer ' + SUPABASE_KEY,
-          'Prefer':        'return=minimal'
-        },
-        body: JSON.stringify(payload)
-      }).catch(function(e) { console.warn('Supabase error:', e); })
+      /* NOTIFICATION — your Make scenario for operator alerts */
+      fetch(MAKE_WEBHOOK, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(makePayload)
+      }).catch(function(e) { console.warn('Make webhook error:', e); })
     ]);
   } catch(e) { console.warn('Submit error:', e); }
-  /* Always proceed to success regardless of network result */
+  /* Always show success — never block UX on a network hiccup */
 
   document.getElementById('overlay').classList.remove('show');
 
@@ -1314,7 +1359,7 @@ window.submitForm = async function() {
     '<div style="font-size:3.6rem;margin-bottom:18px">⚡</div>' +
     '<h3 style="font-family:\'DM Sans\',sans-serif;font-weight:900;font-size:1.4rem;color:var(--ink);letter-spacing:-0.03em;margin-bottom:10px">You\'re matched! Quote incoming.</h3>' +
     '<p style="font-size:0.84rem;color:var(--muted);line-height:1.72;max-width:320px;margin:0 auto 24px">' +
-      'Expect a call or email from <strong>' + MATCHED_BUYER + '</strong> within 24 hours. Zero pressure — just a clear, honest quote.' +
+      'Expect a call or email from <strong>' + (formData.matched_buyer || 'your matched installer') + '</strong> within 24 hours. Zero pressure — just a clear, honest quote.' +
     '</p>' +
     '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">' +
       '<span style="background:var(--green-pale);border:1px solid rgba(18,199,106,0.22);border-radius:50px;padding:6px 14px;font-size:0.73rem;font-weight:700;color:var(--green-dk)">✓ CEC Verified</span>' +
