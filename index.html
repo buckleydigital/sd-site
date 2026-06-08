@@ -1121,14 +1121,18 @@ footer .logo-icon{box-shadow:none}
 </footer>
 
 <script>
-/* ══════════════════════════════════════════════
+/* ════════════════════════════════════════════
    CONFIG - replace ALL values before going live
-══════════════════════════════════════════════ */
-var MAKE_WEBHOOK  = 'https://hook.eu2.make.com/6b7th8q12xdjkej49lw5tlsqesou4o21';
-var SUPABASE_URL  = 'https://bvwqbjggmnfzqwdpuvjm.supabase.co';
-var SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ2d3FiamdnbW5menF3ZHB1dmptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwMTMxODYsImV4cCI6MjA5NDU4OTE4Nn0.lkbg3-ZQnQJhHBPYJpYeBeuWm-n3XDAsaIq4HWIM84o';
-var TOTAL_STEPS   = 5;
-var formData      = { source: 'PPL' };
+════════════════════════════════════════════ */
+var MAKE_WEBHOOK        = 'https://hook.eu2.make.com/6b7th8q12xdjkej49lw5tlsqesou4o21';
+var SUPABASE_URL        = 'https://wmegoygrancfwxagqskh.supabase.co';
+var SUPABASE_ANON_KEY   = 'sb_publishable_UHQNxVCjHJnFjssYwTiwcQ_3FYovX8I';
+var SURVEY_NICHE        = 'solar';
+var SURVEY_SOURCE       = 'QUOTELEADS PPL';
+var SUBMIT_LEAD_URL     = SUPABASE_URL + '/functions/v1/submit-lead';
+var POSTCODE_LOOKUP_URL = SUPABASE_URL + '/functions/v1/postcode-lookup';
+var TOTAL_STEPS         = 5;
+var formData            = { source: SURVEY_SOURCE };
 
 /* ── Progress ── */
 function updateProgress(step) {
@@ -1206,8 +1210,7 @@ window.submitPostcode = async function() {
 
   try {
     var resp = await fetch(
-      'https://wmegoygrancfwxagqskh.supabase.co/functions/v1/postcode-lookup' +
-      '?postcode=' + pc + '&niche=solar'
+      POSTCODE_LOOKUP_URL + '?postcode=' + pc + '&niche=' + SURVEY_NICHE
     );
     var data = await resp.json();
 
@@ -1223,7 +1226,7 @@ window.submitPostcode = async function() {
     } else {
       /* ❌ No coverage for this postcode */
       pcEl.classList.add('err');
-      errEl.textContent   = "We don\u2019t have an installer covering that postcode yet \u2014 try a neighbouring postcode.";
+      errEl.textContent   = "We don’t have an installer covering that postcode yet — try a neighbouring postcode.";
       errEl.style.display = 'block';
     }
   } catch(e) {
@@ -1237,7 +1240,7 @@ window.submitPostcode = async function() {
     document.getElementById('consentBuyer').textContent = 'Solara Energy Solutions';
     goToStep(4, 5);
   } finally {
-    btn.textContent = 'Find My Local Installer \u2192';
+    btn.textContent = 'Find My Local Installer →';
     btn.disabled    = false;
   }
 };
@@ -1319,7 +1322,7 @@ window.submitForm = async function() {
     email:              formData.email,
     phone:              formData.phone,
     postcode:           formData.postcode,
-    niche:              'solar',
+    niche:              SURVEY_NICHE,
     source:             formData.source,
     is_homeowner:       formData.is_homeowner,
     purchase_timeline:  formData.purchase_timeline,
@@ -1337,9 +1340,9 @@ window.submitForm = async function() {
   try {
     await Promise.all([
       /* PRIMARY - handles dedup, insert into ppl_leads, client match, delivery */
-      fetch('https://wmegoygrancfwxagqskh.supabase.co/functions/v1/submit-lead', {
+      fetch(SUBMIT_LEAD_URL, {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY },
         body:    JSON.stringify(leadPayload)
       }).catch(function(e) { console.warn('submit-lead error:', e); }),
 
@@ -1355,8 +1358,8 @@ window.submitForm = async function() {
         method:  'POST',
         headers: {
           'Content-Type':  'application/json',
-          'apikey':        SUPABASE_KEY,
-          'Authorization': 'Bearer ' + SUPABASE_KEY,
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
           'Prefer':        'return=minimal'
         },
         body: JSON.stringify({
